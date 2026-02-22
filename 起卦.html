@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <!-- H5 移动端沉浸式与防缩放配置 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#1A0505">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>森泽算盘 - 命理风水综合引擎 v71.0</title>
+    
+    <!-- 专业历法库与图标 -->
+    <script src="https://cdn.jsdelivr.net/npm/lunar-javascript@1.2.37/lunar.js"></script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@300;500;700;900&display=swap');
+
+        :root {
+            --c-red: #8B0000; --c-gold: #D4AF37; --c-fire: #FF4500; --c-bg: #F5F2E9;
+            --color-jin: #D4AF37; --color-mu: #10B981; --color-shui: #3B82F6; --color-huo: #EF4444; --color-tu: #92400E;
+        }
+
+        body {
+            font-family: 'Noto Serif SC', serif; background-color: var(--c-bg);
+            background-image: url("data:image/svg+xml,%3Csvg width='100' height='100' viewBox='0 0 100 100' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M50 50l-25 25m0-50l25 25m25 25l-25-25m25-25l-25 25' stroke='%23C5A059' stroke-width='0.4' opacity='0.1'/%3E%3C/svg%3E");
+            color: #2D2D2D; padding-bottom: 120px;
+            /* 阻止移动端默认的下拉刷新拉伸效果 */
+            overscroll-behavior-y: none;
+        }
+
+        .font-art { font-family: 'Ma Shan Zheng', cursive; }
+
+        /* 闪光命字动画 */
+        @keyframes fortune-glow {
+            0%, 100% { color: #8B0000; text-shadow: 0 0 5px #D4AF37; }
+            50% { color: #FFD700; text-shadow: 0 0 20px #FFD700, 0 0 35px #FF4500; transform: scale(1.05); }
+        }
+        .ming-box { animation: fortune-glow 2.5s infinite ease-in-out; display: inline-block; }
+
+        /* 马年 Logo 动画 */
+        @keyframes horse-pulse {
+            0%, 100% { filter: drop-shadow(0 0 5px #FF4500); transform: scale(1); }
+            50% { filter: drop-shadow(0 0 15px #FFD700); transform: scale(1.05); }
+        }
+        .ma-logo { animation: horse-pulse 3s infinite ease-in-out; }
+
+        .master-card { background: #FFF; border: 2px solid #D4AF37; border-radius: 12px; box-shadow: 0 15px 45px rgba(139, 0, 0, 0.1); position: relative; margin-bottom: 24px; overflow: hidden; }
+
+        /* 八字排盘柱 */
+        .pillar-box {
+            writing-mode: vertical-lr; text-orientation: upright; font-family: 'Ma Shan Zheng'; font-size: 1.8rem; letter-spacing: 0.5rem;
+            background: #FFFEFA; border: 1px solid #D4AF37; padding: 1.5rem 0.6rem; width: 100%; display: flex; align-items: center; justify-content: center;
+            box-shadow: inset 0 0 20px rgba(197, 160, 89, 0.1); border-radius: 4px;
+        }
+
+        /* 五行 UI：标签完美居中 */
+        .wuxing-line { height: 20px; width: 100%; border-radius: 10px; overflow: hidden; display: flex; background: #eee; box-shadow: inset 0 2px 4px rgba(0,0,0,0.1); }
+        .wx-segment { height: 100%; transition: width 1.2s ease; position: relative; }
+        .wx-label-container { display: flex; width: 100%; margin-top: 10px; font-size: 11px; font-weight: 900; }
+        .wx-label-item { text-align: center; transition: width 1.2s ease; overflow: hidden; display: flex; justify-content: center; }
+
+        /* 严谨章节排版 */
+        .chapter-h { color: var(--c-red); font-weight: 900; font-size: 1.5rem; margin-bottom: 1.5rem; display: flex; align-items: center; gap: 12px; border-bottom: 2.5px solid var(--c-gold); padding-bottom: 12px; }
+        .sub-h { color: #5D0E0E; font-weight: 800; font-size: 1.25rem; margin-top: 2rem; margin-bottom: 1rem; display: flex; align-items: center; gap: 10px; }
+        .sub-h::before { content: ''; width: 4.5px; height: 22px; background: var(--c-gold); border-radius: 2px; }
+        .report-p { margin-bottom: 1.6rem; line-height: 2.4; text-align: justify; text-indent: 2.2em; font-size: 1.05rem; color: #333; }
+        .report-imp { color: #B71C1C; font-weight: 900; background: rgba(183, 28, 28, 0.08); padding: 0 4px; border-radius: 2px; border-bottom: 2px solid #B71C1C; }
+
+        .tab-nav { display: flex; background: #FAFAFA; border-bottom: 2px solid #D4AF37; overflow-x: auto; scrollbar-width: none; }
+        .tab-nav::-webkit-scrollbar { display: none; }
+        .tab-btn { flex: 1; min-width: 100px; padding: 20px 0; text-align: center; color: #666; font-weight: 800; font-size: 1rem; border-bottom: 4px solid transparent; white-space: nowrap; cursor: pointer; transition: 0.3s; }
+        .tab-btn.active { color: #8B0000; border-bottom-color: #8B0000; background: #FFFBF0; }
+
+        .btn-main { background: linear-gradient(135deg, #8B0000 0%, #330000 100%); color: #FFD700; border: 1px solid #000; transition: 0.3s; cursor: pointer; border-radius: 10px; font-weight: 900; }
+        .btn-main:active { transform: scale(0.96); }
+
+        /* 起卦商业样式 */
+        .wealth-card { background: #FFF9E6; border: 1.5px solid #F6AD55; border-radius: 12px; padding: 16px; margin-bottom: 15px; }
+        .wealth-title { color: #C05621; font-weight: 900; display: flex; align-items: center; gap: 8px; margin-bottom: 8px; border-bottom: 1px dashed #F6AD55; padding-bottom: 4px; }
+        .lucky-num-box { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; background: #8B0000; color: white; border-radius: 50%; font-weight: bold; margin: 0 4px; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+        .direction-tag { background: #8B0000; color: #FFD700; padding: 2px 10px; border-radius: 20px; font-weight: 900; font-size: 0.9rem; }
+        
+        .qr-frame { width: 240px; height: auto; margin: 0 auto; border: 4px solid #8B0000; border-radius: 12px; padding: 5px; background: white; box-shadow: 0 15px 35px rgba(139, 0, 0, 0.15); overflow: hidden; }
+
+        /* 星座标签样式 */
+        .constellation-tag { background: #1A0505; color: #FFD700; font-size: 11px; padding: 2px 8px; border-radius: 6px; display: inline-flex; align-items: center; gap: 4px; border: 1px solid #8B0000; margin-left: 10px; font-weight: 900; vertical-align: middle; }
+
+        /* 罗盘与风水容器样式 */
+        .fs-container { position: relative; width: 100%; aspect-ratio: 1/1; background-color: #f1f1f1; border-radius: 12px; overflow: hidden; border: 2px dashed #C5A059; margin-bottom: 16px; }
+        
+        /* 移除 transform 过渡动画以实现零延迟拖拽 */
+        .fs-bg-img { position: absolute; top: 0; left: 0; width: 100%; height: 100%; object-fit: contain; object-position: center; touch-action: none; }
+        .cursor-grab { cursor: grab; }
+        .cursor-grabbing { cursor: grabbing; }
+
+        .fs-compass-layer { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; transition: transform 0.1s linear, opacity 0.2s ease; display: flex; align-items: center; justify-content: center; }
+        
+        .compass-svg { width: 95%; height: 95%; drop-shadow: 0 5px 15px rgba(0,0,0,0.3); }
+        .control-slider { -webkit-appearance: none; width: 100%; height: 6px; background: #ddd; border-radius: 5px; outline: none; margin: 10px 0; }
+        .control-slider::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 20px; height: 20px; border-radius: 50%; background: #8B0000; cursor: pointer; border: 2px solid #FFD700; }
+    </style>
+</head>
+<body class="antialiased">
+
+    <!-- 顶栏 -->
+    <header class="bg-[#1A0505] text-[#D4AF37] sticky top-0 z-50 shadow-xl border-b-2 border-[#8B0000]">
+        <div class="max-w-xl mx-auto px-4 py-4 flex justify-between items-center text-white">
+            <div class="flex items-center gap-3">
+                <div class="w-16 h-16 border-2 border-[#D4AF37] rounded-xl bg-[#330000] flex items-center justify-center font-art text-5xl shadow-[0_0_25px_rgba(212,175,55,0.4)]">
+                    <span class="ming-box">命</span>
+                </div>
+                <div>
+                    <h1 class="font-bold text-2xl tracking-widest text-[#FFF8E1]">森泽算盘</h1>
+                    <div class="text-[10px] text-[#D4AF37] opacity-80 font-bold uppercase tracking-widest">宗师珍藏版 v71.0</div>
+                </div>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="flex flex-col items-end justify-center">
+                    <span class="text-[10px] bg-red-900 px-2 py-0.5 rounded border border-red-700 font-bold text-white mb-1.5">2026 丙午</span>
+                    <span class="text-base md:text-lg font-black text-[#FFD700] italic leading-none whitespace-nowrap">森泽师兄实时推演</span>
+                </div>
+                <i id="zodiacLogo" class="ph-fill ph-horse text-6xl text-[#FFD700] ma-logo"></i>
+            </div>
+        </div>
+    </header>
+
+    <!-- 顶级双栖模块切换 -->
+    <div class="max-w-xl mx-auto px-4 mt-5">
+        <div class="flex bg-gray-200/60 p-1 rounded-xl shadow-inner border border-gray-300">
+            <button id="nav-bazi" class="flex-1 py-2.5 text-sm font-black text-[#8B0000] bg-white rounded-lg shadow-sm transition-all" onclick="switchAppMode('bazi')">八字命鉴</button>
+            <button id="nav-fengshui" class="flex-1 py-2.5 text-sm font-bold text-gray-500 rounded-lg hover:text-gray-800 transition-all" onclick="switchAppMode('fengshui')">八宅风水</button>
+        </div>
+    </div>
+
+    <!-- ==================== 八字命理模块 ==================== -->
+    <main id="app-bazi" class="max-w-xl mx-auto px-4 pt-6">
+        <section id="inputSection" class="master-card p-10 fade-in">
+            <div class="text-center mb-10"><h2 class="font-art text-5xl text-[#5D0E0E]">天机命鉴</h2><div class="h-1 w-24 bg-[#D4AF37] mx-auto mt-4"></div><p class="text-gray-500 mt-6 font-bold uppercase tracking-widest">大衍逻辑归元演算系统</p></div>
+            <form id="calcForm" class="space-y-7">
+                <div class="space-y-2"><label class="text-xs font-black text-[#8B0000] uppercase tracking-widest ml-1">生辰公历坐标</label>
+                    <div class="grid grid-cols-3 gap-3">
+                        <div class="border-[#C5A059] border bg-white rounded-lg overflow-hidden flex h-16 shadow-sm"><select id="selYear" class="flex-1 text-center outline-none text-2xl font-bold" onchange="updateDays()"></select><div class="bg-[#F3E5AB] px-3 flex items-center font-bold text-[#5D0E0E] border-l border-[#C5A059]">年</div></div>
+                        <div class="border-[#C5A059] border bg-white rounded-lg overflow-hidden flex h-16 shadow-sm"><select id="selMonth" class="flex-1 text-center outline-none text-2xl font-bold" onchange="updateDays()"></select><div class="bg-[#F3E5AB] px-3 flex items-center font-bold text-[#5D0E0E] border-l border-[#C5A059]">月</div></div>
+                        <div class="border-[#C5A059] border bg-white rounded-lg overflow-hidden flex h-16 shadow-sm"><select id="selDay" class="flex-1 text-center outline-none text-2xl font-bold"></select><div class="bg-[#F3E5AB] px-3 flex items-center font-bold text-[#5D0E0E] border-l border-[#C5A059]">日</div></div>
+                    </div>
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div class="border-[#C5A059] border bg-white rounded-lg overflow-hidden flex h-16 shadow-sm">
+                        <select id="selHour" class="flex-1 text-center outline-none text-xl font-bold">
+                            <option value="0">子时 (23-01)</option><option value="1">丑时 (01-03)</option><option value="3">寅时 (03-05)</option><option value="5">卯时 (05-07)</option><option value="7">辰时 (07-09)</option><option value="9">巳时 (09-11)</option><option value="11">午时 (11-13)</option><option value="13">未时 (13-15)</option><option value="15">申时 (15-17)</option><option value="17">酉时 (17-19)</option><option value="19">戌时 (19-21)</option><option value="21">亥时 (21-23)</option>
+                        </select><div class="bg-[#F3E5AB] px-3 flex items-center font-bold text-[#5D0E0E] border-l border-[#C5A059]">时</div>
+                    </div>
+                    <div class="flex border border-[#C5A059] bg-white rounded-lg overflow-hidden h-16 shadow-sm">
+                        <label class="flex-1 flex items-center justify-center cursor-pointer has-[:checked]:bg-[#5D0E0E] has-[:checked]:text-[#FFD700] transition-all"><input type="radio" name="gender" value="1" class="hidden" checked><span class="font-bold text-lg">乾造(男)</span></label>
+                        <label class="flex-1 flex items-center justify-center cursor-pointer has-[:checked]:bg-[#5D0E0E] has-[:checked]:text-[#FFD700] transition-all"><input type="radio" name="gender" value="0" class="hidden"><span class="font-bold text-lg">坤造(女)</span></label>
+                    </div>
+                </div>
+                <button type="submit" class="btn-main w-full py-6 rounded-xl font-bold text-2xl mt-4 flex items-center justify-center gap-3 shadow-2xl"><i class="ph-fill ph-lightning"></i> 开启全息命鉴</button>
+            </form>
+        </section>
+
+        <!-- 结果展示 -->
+        <section id="resultArea" class="hidden fade-in">
+            <div class="master-card p-6 bg-[#FFFEFA]">
+                <div class="flex justify-between items-center mb-6 border-b border-dashed border-[#C5A059] pb-3">
+                    <div class="flex items-center">
+                        <span class="text-sm font-black text-[#5D0E0E]" id="lunarFull">--</span>
+                        <span id="constellationSlot"></span> 
+                    </div>
+                    <span id="patternBadge" class="text-[11px] bg-[#5D0E0E] text-[#FFD700] px-3 py-1 rounded shadow-lg font-bold">格局演算中</span>
+                </div>
+                <div class="grid grid-cols-4 gap-2 mb-8 text-center">
+                    <div><span class="text-[11px] text-gray-400 mb-1 text-nowrap">年柱</span><div class="pillar-box" id="pYear">--</div></div>
+                    <div><span class="text-[11px] text-gray-400 mb-1 text-nowrap">月柱</span><div class="pillar-box" id="pMonth">--</div></div>
+                    <div class="relative"><span class="text-[11px] text-red-600 font-black mb-1 text-nowrap">日元(主)</span><div class="pillar-box border-2 border-[#8B0000] text-[#8B0000] bg-red-50" id="pDay">--</div></div>
+                    <div><span class="text-[11px] text-gray-400 mb-1 text-nowrap">时柱</span><div class="pillar-box" id="pHour">--</div></div>
+                </div>
+                
+                <div class="bg-gray-50 p-6 rounded-xl border border-gray-200 shadow-inner">
+                    <div class="flex justify-between text-xs font-black mb-3"><span>命局五行能量占比</span><span id="strongestLabel" class="text-red-800">--</span></div>
+                    <div class="wuxing-line" id="wuxingLine"></div>
+                    <div class="wx-label-container" id="wuxingLabels"></div>
+                </div>
+
+                <div id="logicTags" class="flex flex-wrap gap-2 mt-6"></div>
+                <div id="luckyDaysModule" class="mt-4 bg-orange-50/50 p-4 rounded-lg border border-orange-100 hidden">
+                    <h4 class="text-xs font-black text-[#C05621] mb-2 flex items-center gap-2"><i class="ph-fill ph-calendar-check"></i> 本月专属避煞吉日</h4>
+                    <ul id="luckyDaysList" class="text-[10px] grid grid-cols-2 gap-2 text-gray-600"></ul>
+                </div>
+                <div class="text-[11px] text-gray-500 flex justify-between px-1 mt-6 border-t pt-4 border-dashed border-gray-300"><span id="nayinVal">纳音：--</span><span id="boneVal" class="font-bold text-[#8B0000]">骨重：--</span></div>
+            </div>
+
+            <div class="master-card bg-white min-h-[950px] flex flex-col">
+                <div class="tab-nav"><div class="tab-btn active" onclick="switchTab('total', this)">岁序乾坤</div><div class="tab-btn" onclick="switchTab('career', this)">官禄财星</div><div class="tab-btn" onclick="switchTab('love', this)">缘契三生</div><div class="tab-btn" onclick="switchTab('ancient', this)">星盘秘辛</div></div>
+                <div class="p-8 flex-1 overflow-y-auto" id="mainContent">
+                    <div class="flex flex-col items-center justify-center h-64 text-gray-400" id="loadingState">
+                        <i class="ph-bold ph-spinner-gap animate-spin text-6xl mb-4 text-[#8B0000]"></i>
+                        <p class="font-bold text-xl text-[#8B0000] font-art tracking-widest text-center">师兄正在深度演算大衍之数...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+        
+        <!-- 八字底部栏 -->
+        <div class="fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur border-t-2 border-[#C5A059] px-4 py-5 z-40 shadow-2xl flex gap-3 max-w-xl mx-auto" id="bazi-footer">
+            <button class="flex-1 border-2 border-gray-300 text-gray-700 font-bold rounded-lg py-3 text-sm" onclick="resetApp()">重置</button>
+            <button onclick="handleDivinationFlow()" class="flex-[3] btn-main rounded-lg py-3 font-bold text-sm flex items-center justify-center gap-2"><i class="ph-fill ph-yin-yang text-2xl animate-pulse"></i> 森泽师兄起卦 (¥1.00)</button>
+        </div>
+    </main>
+
+
+    <!-- ==================== 风水堪舆模块 ==================== -->
+    <main id="app-fengshui" class="max-w-xl mx-auto px-4 pt-6 hidden">
+        <!-- 罗盘定局输入 -->
+        <section id="fsInputSection" class="master-card p-6 fade-in">
+            <div class="text-center mb-6">
+                <h2 class="font-art text-4xl text-[#5D0E0E]">八宅明镜</h2>
+                <div class="h-1 w-16 bg-[#D4AF37] mx-auto mt-2 mb-3"></div>
+                <p class="text-gray-500 text-xs font-bold uppercase">上古图腾 · 寻龙点穴</p>
+            </div>
+
+            <!-- 图纸与罗盘容器 -->
+            <div class="fs-container" id="fsDropzone">
+                <!-- 户型图底图 -->
+                <img id="floorplanImg" class="fs-bg-img hidden" src="" alt="户型图" draggable="false">
+                
+                <!-- 引导上传文本 (修复点击呼出) -->
+                <div id="fsUploadLabel" onclick="document.getElementById('fsUpload').click()" class="absolute inset-0 flex flex-col items-center justify-center cursor-pointer bg-white/60 hover:bg-white/80 transition-all z-20">
+                    <i class="ph-fill ph-house-line text-5xl text-[#8B0000] mb-2 opacity-80"></i>
+                    <span class="text-sm font-bold text-gray-700 bg-white px-4 py-2 rounded-full shadow border border-gray-200">点击上传房屋平面图</span>
+                    <span class="text-[10px] text-gray-600 font-bold mt-2 bg-white/50 px-2 py-0.5 rounded">支持 JPG / PNG / WEBP</span>
+                </div>
+                <input type="file" id="fsUpload" accept="image/png, image/jpeg, image/webp, image/jpg" class="hidden">
+
+                <!-- 八卦透明罗盘 (SVG) + 动态生成的 UI 标签组 -->
+                <div class="fs-compass-layer z-10" id="compassOverlay" style="opacity: 0.85;">
+                    <svg viewBox="0 0 200 200" class="compass-svg">
+                        <circle cx="100" cy="100" r="98" fill="rgba(255,255,255,0.4)" stroke="#8B0000" stroke-width="1.5" stroke-dasharray="4 4"/>
+                        <circle cx="100" cy="100" r="80" fill="transparent" stroke="#D4AF37" stroke-width="2"/>
+                        <circle cx="100" cy="100" r="60" fill="rgba(255,253,245,0.7)" stroke="#8B0000" stroke-width="1"/>
+                        <circle cx="100" cy="100" r="25" fill="rgba(139,0,0,0.9)" stroke="#D4AF37" stroke-width="2"/>
+                        <!-- 阴阳鱼简绘 -->
+                        <path d="M 100 75 A 25 25 0 0 1 100 125 A 12.5 12.5 0 0 1 100 100 A 12.5 12.5 0 0 0 100 75" fill="#FFD700"/>
+                        <circle cx="100" cy="87.5" r="3" fill="#8B0000"/>
+                        <circle cx="100" cy="112.5" r="3" fill="#FFD700"/>
+                        <!-- 八卦辐射线 -->
+                        <line x1="100" y1="2" x2="100" y2="198" stroke="#8B0000" stroke-width="1"/>
+                        <line x1="2" y1="100" x2="198" y2="100" stroke="#8B0000" stroke-width="1"/>
+                        <line x1="30.7" y1="30.7" x2="169.3" y2="169.3" stroke="#8B0000" stroke-width="1"/>
+                        <line x1="30.7" y1="169.3" x2="169.3" y2="30.7" stroke="#8B0000" stroke-width="1"/>
+                        
+                        <!-- 8个方位组 (包含原始文字 + 动态UI标签插槽) -->
+                        <g id="dir-南" transform="rotate(0 100 100)">
+                            <text x="100" y="16" font-size="8" text-anchor="middle" fill="#8B0000" font-weight="900">正南 离火</text>
+                            <g class="ui-tag"></g>
+                        </g>
+                        <g id="dir-北" transform="rotate(180 100 100)">
+                            <text x="100" y="16" font-size="8" text-anchor="middle" fill="#8B0000" font-weight="900">正北 坎水</text>
+                            <g class="ui-tag"></g>
+                        </g>
+                        <g id="dir-东" transform="rotate(-90 100 100)">
+                            <text x="100" y="16" font-size="8" text-anchor="middle" fill="#8B0000" font-weight="900">正东 震木</text>
+                            <g class="ui-tag"></g>
+                        </g>
+                        <g id="dir-西" transform="rotate(90 100 100)">
+                            <text x="100" y="16" font-size="8" text-anchor="middle" fill="#8B0000" font-weight="900">正西 兑金</text>
+                            <g class="ui-tag"></g>
+                        </g>
+                        <g id="dir-西南" transform="rotate(45 100 100)">
+                            <text x="100" y="16" font-size="8" text-anchor="middle" fill="#8B0000" font-weight="900">西南 坤土</text>
+                            <g class="ui-tag"></g>
+                        </g>
+                        <g id="dir-西北" transform="rotate(135 100 100)">
+                            <text x="100" y="16" font-size="8" text-anchor="middle" fill="#8B0000" font-weight="900">西北 乾金</text>
+                            <g class="ui-tag"></g>
+                        </g>
+                        <g id="dir-东南" transform="rotate(-45 100 100)">
+                            <text x="100" y="16" font-size="8" text-anchor="middle" fill="#8B0000" font-weight="900">东南 巽木</text>
+                            <g class="ui-tag"></g>
+                        </g>
+                        <g id="dir-东北" transform="rotate(-135 100 100)">
+                            <text x="100" y="16" font-size="8" text-anchor="middle" fill="#8B0000" font-weight="900">东北 艮土</text>
+                            <g class="ui-tag"></g>
+                        </g>
+                    </svg>
+                </div>
+            </div>
+
+            <!-- 控制面板 -->
+            <div class="space-y-4 mb-6">
+                <div class="flex justify-end mt-1 mb-[-10px]">
+                    <button onclick="document.getElementById('fsUpload').click()" class="text-xs text-[#8B0000] font-bold border-b border-[#8B0000] pb-0.5">重新选择图纸</button>
+                </div>
+                <div>
+                    <div class="flex justify-between items-center mb-1">
+                        <label class="text-xs font-bold text-gray-600">罗盘旋转校准 <span id="rotDegree" class="text-red-700 font-black">0°</span></label>
+                        <button onclick="toggleCompass()" id="btnCompass" class="text-xs bg-red-50 text-[#8B0000] border border-red-200 px-2 py-1 rounded shadow-sm hover:bg-red-100 transition-all flex items-center gap-1 font-bold"><i class="ph-bold ph-compass"></i>自动校正</button>
+                    </div>
+                    <input type="range" id="fsRotate" min="0" max="360" value="0" class="control-slider">
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-gray-600 mb-1 block">图纸大小与罗盘透明度 (支持手指拖拽图片)</label>
+                    <div class="flex gap-4">
+                        <input type="range" id="fsZoom" min="50" max="250" value="100" class="control-slider flex-1" title="图纸缩放">
+                        <input type="range" id="fsOpacity" min="10" max="100" value="85" class="control-slider flex-1" title="罗盘透明度">
+                    </div>
+                </div>
+                <div class="bg-red-50 p-4 rounded-lg border border-red-100">
+                    <label class="block text-sm font-bold text-[#8B0000] mb-2"><i class="ph-fill ph-door-open"></i> 请确认入户大门朝向：</label>
+                    <select id="doorFacing" class="w-full bg-white border border-red-200 rounded-lg px-4 py-3 text-gray-800 font-bold outline-none focus:ring-2 focus:ring-red-800">
+                        <option value="南">大门朝正南 (坎宅)</option>
+                        <option value="北">大门朝正北 (离宅)</option>
+                        <option value="东">大门朝正东 (兑宅)</option>
+                        <option value="西">大门朝正西 (震宅)</option>
+                        <option value="东南">大门朝东南 (乾宅)</option>
+                        <option value="东北">大门朝东北 (坤宅)</option>
+                        <option value="西南">大门朝西南 (艮宅)</option>
+                        <option value="西北">大门朝西北 (巽宅)</option>
+                    </select>
+                </div>
+            </div>
+
+            <button onclick="analyzeFengshui()" class="btn-main w-full py-5 rounded-xl font-bold text-xl shadow-2xl flex justify-center items-center gap-2">
+                <i class="ph-fill ph-compass"></i> 一键生成风水定局
+                <div id="fsLoader" class="hidden w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+            </button>
+        </section>
+
+        <!-- 风水报告展示区 -->
+        <section id="fsResultSection" class="hidden pb-20">
+            <div class="master-card p-6 bg-white min-h-[600px]">
+                <div class="flex items-center gap-3 mb-6 border-b-2 border-[#D4AF37] pb-4">
+                    <i class="ph-fill ph-scroll text-4xl text-[#8B0000]"></i>
+                    <div>
+                        <h2 class="text-xl font-bold text-[#5D0E0E]">宗师堪舆断言</h2>
+                        <p class="text-xs text-gray-500 font-bold mt-1" id="fsHouseType">--宅 · 风水布局卷</p>
+                    </div>
+                </div>
+                
+                <div id="fsReportContent" class="space-y-2">
+                    <div class="flex flex-col items-center justify-center h-48 text-gray-400">
+                        <i class="ph-bold ph-spinner-gap animate-spin text-5xl mb-3 text-[#8B0000]"></i>
+                        <p class="font-bold tracking-widest text-sm text-[#8B0000]">寻龙点穴，气场建模中...</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- 弹窗：八字起卦支付与解锁 -->
+    <div id="modalOverlay" onclick="closeModal(event)" class="fixed inset-0 bg-black/85 z-[60] hidden flex items-center justify-center p-4 backdrop-blur-sm">
+        <div onclick="event.stopPropagation()" class="bg-[#FFFEFA] w-full max-w-md h-[92vh] overflow-y-auto rounded-lg border-4 border-[#8B0000] p-8 relative shadow-2xl">
+            <div id="modalContent"></div>
+        </div>
+    </div>
+
+    <script>
+        const apiKey = ""; 
+        let GLOBAL_LUNAR = null; let REPORT_DATA = null; let USER_FINGERPRINT = ""; let DIVINED_LOG = {}; 
+
+        // ------------------ 导航与模式切换 ------------------
+        function switchAppMode(mode) {
+            document.getElementById('nav-bazi').className = mode === 'bazi' ? 'flex-1 py-2.5 text-sm font-black text-[#8B0000] bg-white rounded-lg shadow-sm transition-all' : 'flex-1 py-2.5 text-sm font-bold text-gray-500 rounded-lg hover:text-gray-800 transition-all';
+            document.getElementById('nav-fengshui').className = mode === 'fengshui' ? 'flex-1 py-2.5 text-sm font-black text-[#8B0000] bg-white rounded-lg shadow-sm transition-all' : 'flex-1 py-2.5 text-sm font-bold text-gray-500 rounded-lg hover:text-gray-800 transition-all';
+            
+            document.getElementById('app-bazi').classList.toggle('hidden', mode !== 'bazi');
+            document.getElementById('bazi-footer').classList.toggle('hidden', mode !== 'bazi');
+            document.getElementById('app-fengshui').classList.toggle('hidden', mode !== 'fengshui');
+        }
+
+        // ------------------ 八字命理核心逻辑 ------------------
+        const WX_COLOR_MAP = { "金":"var(--color-jin)", "木":"var(--color-mu)", "水":"var(--color-shui)", "火":"var(--color-huo)", "土":"var(--color-tu)" };
+        const getWX = (gz) => "甲乙寅卯".includes(gz)?"木":("丙丁巳午".includes(gz)?"火":("戊己辰戌丑未".includes(gz)?"土":("庚辛申酉".includes(gz)?"金":("壬癸亥子".includes(gz)?"水":"土"))));
+
+        function getBone(lunar, h) {
+            const yW = [1.2, 0.6, 0.7, 1.2, 0.5, 0.9, 0.8, 0.6, 0.8, 0.7, 0.9, 0.9];
+            const mW = [0.6, 0.7, 1.8, 0.9, 0.5, 1.6, 0.9, 1.5, 1.8, 0.8, 0.9, 0.5];
+            const hW = [1.6, 0.6, 0.7, 1.0, 0.9, 1.6, 1.0, 0.8, 0.8, 0.9, 0.6, 0.6];
+            return (yW[(lunar.getYear()-4)%12] + mW[lunar.getMonth()-1] + (lunar.getDay()%2==0?1.0:0.5) + hW[h%12]).toFixed(1);
+        }
+
+        function getTags(bazi) {
+            const yz = bazi.getYearZhi(), mz = bazi.getMonthZhi();
+            const res = [];
+            if(yz === "午") res.push("岁值本命 (自刑)"); if(yz === "巳") res.push("巳午半会火局");
+            if(yz === "子") res.push("子午相冲动荡"); if(mz === "丑") res.push("丑午相害阻滞");
+            return res;
+        }
+
+        function getConstellation(month, day) {
+            const date = month * 100 + day;
+            if (date >= 321 && date <= 419) return "白羊座";
+            if (date >= 420 && date <= 520) return "金牛座";
+            if (date >= 521 && date <= 621) return "双子座";
+            if (date >= 622 && date <= 722) return "巨蟹座";
+            if (date >= 723 && date <= 822) return "狮子座";
+            if (date >= 823 && date <= 922) return "处女座";
+            if (date >= 923 && date <= 1023) return "天秤座";
+            if (date >= 1024 && date <= 1122) return "天蝎座";
+            if (date >= 1123 && date <= 1221) return "射手座";
+            if (date >= 1222 || date <= 119) return "摩羯座";
+            if (date >= 120 && date <= 218) return "水瓶座";
+            return "双鱼座";
+        }
+
+        // --- 核心修复：死命令防短回复机制 ---
+        async function fetchAnalysis(prompt, retry = 0) {
+            const system = `你现在是“森泽师兄”，顶级命理风水大师。
+必须严格返回扁平 JSON 对象。严禁嵌套，内容纯中文。
+字段列表：t_geju, t_wuxing, t_liunian, c_fangxiang, c_caiku, c_jianyi, l_lianyuan, l_cidang, l_huajie, a_piming, a_zhuxing, a_shensha。
+【死命令：字数强制要求】
+每一个字段的内容必须是长篇大论的深度解析！每个字段绝对不允许少于150字！
+请多用四字断语，结合大运流年、十神生克、五行制化详细展开分析。如果只是简单几句话，将视为推演失败！
+2026丙午年火旺，请结合具体八字进行详尽批断。直接返回 JSON 文本，不要 Markdown 包裹。`;
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        contents: [{ parts: [{ text: prompt + " 请务必长篇大论，每个字段不少于150字，文风古雅厚重！" }] }], 
+                        systemInstruction: { parts: [{ text: system }] }, 
+                        generationConfig: { responseMimeType: "application/json", temperature: 0.7 } 
+                    })
+                });
+                const data = await response.json(); let text = data.candidates[0].content.parts[0].text.trim();
+                text = text.replace(/```json/g, "").replace(/```/g, "");
+                return JSON.parse(text);
+            } catch (e) {
+                if(retry < 3) return fetchAnalysis(prompt, retry + 1);
+                return null;
+            }
+        }
+
+        window.onload = function() {
+            const ys = document.getElementById('selYear'), ms = document.getElementById('selMonth');
+            for(let i=1950; i<=2030; i++) ys.add(new Option(i + "年", i));
+            for(let i=1; i<=12; i++) ms.add(new Option(i + "月", i));
+            ys.value = 1989; updateDays();
+        };
+
+        function updateDays() {
+            const y = document.getElementById('selYear').value, m = document.getElementById('selMonth').value;
+            const ds = document.getElementById('selDay'); ds.innerHTML = "";
+            const max = new Date(y, m, 0).getDate();
+            for(let i=1; i<=max; i++) ds.add(new Option(i + "日", i));
+        }
+
+        window.resetApp = function() {
+            document.getElementById('resultArea').classList.add('hidden');
+            document.getElementById('inputSection').classList.remove('hidden');
+            REPORT_DATA = null; GLOBAL_LUNAR = null; USER_FINGERPRINT = "";
+            document.getElementById('mainContent').innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-gray-400" id="loadingState"><i class="ph-bold ph-spinner-gap animate-spin text-6xl mb-4 text-[#8B0000]"></i><p class="font-bold text-xl text-[#8B0000] font-art tracking-widest text-center">师兄正在深度演算大衍之数...</p></div>`;
+            window.scrollTo({top: 0, behavior: 'smooth'});
+        };
+
+        window.closeModal = function() { document.getElementById('modalOverlay').classList.add('hidden'); };
+
+        document.getElementById('calcForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const y = parseInt(document.getElementById('selYear').value), m = parseInt(document.getElementById('selMonth').value), d = parseInt(document.getElementById('selDay').value), h = parseInt(document.getElementById('selHour').value), g = document.querySelector('input[name="gender"]:checked').value;
+            const solar = Solar.fromYmdHms(y, m, d, h, 0, 0); const lunar = solar.getLunar();
+            GLOBAL_LUNAR = lunar; const bazi = lunar.getEightChar(); bazi.setSect(1); USER_FINGERPRINT = bazi.toString() + (g === "1" ? "男" : "女") + y;
+
+            document.getElementById('inputSection').classList.add('hidden'); document.getElementById('resultArea').classList.remove('hidden');
+            document.getElementById('lunarFull').innerText = lunar.toString();
+            
+            const star = getConstellation(m, d);
+            document.getElementById('constellationSlot').innerHTML = `<span class="constellation-tag">${star}</span>`;
+
+            document.getElementById('pYear').innerHTML = bazi.getYearGan() + "<br>" + bazi.getYearZhi();
+            document.getElementById('pMonth').innerHTML = b
