@@ -18,7 +18,9 @@
     <!-- 新增：引入 PDF.js 库，用于在前端将 PDF 转换为可拖拽的图片 -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
     <script>
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        if (typeof pdfjsLib !== 'undefined') {
+            pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+        }
     </script>
     
     <style>
@@ -413,11 +415,12 @@
             return "双鱼座";
         }
 
+        // --- 核心修复：AI 扁平化数据请求 + 强制字数厚度均衡 ---
         async function fetchAnalysis(prompt, retry = 0) {
             const system = `你现在是“森泽师兄”，顶级命理大师。
             要求：必须严格返回扁平 JSON 对象。严禁嵌套，内容纯中文。
-            字段：t_geju, t_wuxing, t_liunian, c_fangxiang, c_caiku, c_jianyi, l_lianyuan, l_cidang, l_huajie, a_piming, a_zhuxing, a_shensha。
-            【极其重要】：为了确保公平详尽，每个字段的内容长度必须精准控制在 180 到 250 字之间。
+            字段列表：t_geju, t_wuxing, t_liunian, c_fangxiang, c_caiku, c_jianyi, l_lianyuan, l_cidang, l_huajie, a_piming, a_zhuxing, a_shensha。
+            【绝对强制】：为了确保公平详尽，每个字段的内容长度必须超过150字，越详细越好！如果字数过少将被判定为不合格。请充分展开古法命理细节。
             2026丙午，火旺。根据提供的八字进行深度推演。直接返回 JSON 文本，不要 Markdown 包裹。`;
             try {
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
@@ -505,7 +508,12 @@
             document.getElementById('luckyDaysModule').classList.remove('hidden');
 
             REPORT_DATA = await fetchAnalysis(`命主:${g==1?'乾造':'坤造'}, 八字:${bazi.toString()}, 刑冲:${tags.join(',')}, 流年:2026丙午。深度推演。`);
-            if(REPORT_DATA) { switchTab('total', document.querySelector('.tab-btn')); }
+            
+            if(REPORT_DATA) { 
+                switchTab('total', document.querySelector('.tab-btn')); 
+            } else {
+                document.getElementById('mainContent').innerHTML = `<div class="flex flex-col items-center justify-center h-64 text-red-700 font-bold text-center px-4"><i class="ph-fill ph-warning-circle text-5xl mb-3"></i><p>天机连接失败！</p><p class="text-sm mt-2 font-normal text-gray-600">如果您在外部网站运行，请检查网络并确保在代码中填入了有效的 apiKey。</p></div>`;
+            }
         };
 
         function switchTab(key, el) {
@@ -837,7 +845,7 @@
             const system = `你现在是风水宗师。用户房屋大门朝向【${door}】，属【${house}】。
             要求：严格返回扁平 JSON。严禁嵌套，内容纯中文。
             字段：fs_wealth (财位与催旺), fs_health (健康与避煞), fs_career (文昌与事业), fs_advice (总体风水调理)。
-            【极其重要】：每个字段的分析字数必须在 150 到 200 字之间，根据八宅理论进行深度专业点评。直接返回 JSON。`;
+            【绝对强制】：每个字段的分析字数必须超过150字，越详细越好，根据八宅理论进行深度专业点评。直接返回 JSON 文本。`;
             try {
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                     method: "POST", headers: { "Content-Type": "application/json" },
@@ -898,7 +906,7 @@
                     </div>
                 `;
             } else {
-                contentDiv.innerHTML = `<p class="text-center text-red-700 font-bold py-10">推演失败，请检查网络后重试。</p>`;
+                contentDiv.innerHTML = `<div class="text-center text-red-700 font-bold py-10"><i class="ph-fill ph-warning-circle text-4xl mb-2"></i><p>勘测失败，无法建立链接！</p><p class="text-sm mt-2 font-normal text-gray-600">如果您在外部网站运行，请检查网络并确保在代码中填入了有效的 apiKey。</p></div>`;
             }
             
             document.getElementById('fsResultSection').scrollIntoView({ behavior: 'smooth' });
