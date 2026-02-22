@@ -8,12 +8,18 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#1A0505">
     <meta name="mobile-web-app-capable" content="yes">
-    <title>森泽算盘 - 命理风水综合引擎 v71.0</title>
+    <title>森泽算盘 - 命理风水综合引擎 v70.0</title>
     
     <!-- 专业历法库与图标 -->
     <script src="https://cdn.jsdelivr.net/npm/lunar-javascript@1.2.37/lunar.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/@phosphor-icons/web"></script>
+    
+    <!-- 新增：引入 PDF.js 库，用于在前端将 PDF 转换为可拖拽的图片 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+    </script>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@300;500;700;900&display=swap');
@@ -114,7 +120,7 @@
                 </div>
                 <div>
                     <h1 class="font-bold text-2xl tracking-widest text-[#FFF8E1]">森泽算盘</h1>
-                    <div class="text-[10px] text-[#D4AF37] opacity-80 font-bold uppercase tracking-widest">宗师珍藏版 v71.0</div>
+                    <div class="text-[10px] text-[#D4AF37] opacity-80 font-bold uppercase tracking-widest">宗师珍藏版 v70.0</div>
                 </div>
             </div>
             <div class="flex items-center gap-4">
@@ -227,13 +233,13 @@
                 <!-- 户型图底图 -->
                 <img id="floorplanImg" class="fs-bg-img hidden" src="" alt="户型图" draggable="false">
                 
-                <!-- 引导上传文本 (修复点击呼出) -->
+                <!-- 引导上传文本 -->
                 <div id="fsUploadLabel" onclick="document.getElementById('fsUpload').click()" class="absolute inset-0 flex flex-col items-center justify-center cursor-pointer bg-white/60 hover:bg-white/80 transition-all z-20">
                     <i class="ph-fill ph-house-line text-5xl text-[#8B0000] mb-2 opacity-80"></i>
-                    <span class="text-sm font-bold text-gray-700 bg-white px-4 py-2 rounded-full shadow border border-gray-200">点击上传房屋平面图</span>
-                    <span class="text-[10px] text-gray-600 font-bold mt-2 bg-white/50 px-2 py-0.5 rounded">支持 JPG / PNG / WEBP</span>
+                    <span id="uploadHintText" class="text-sm font-bold text-gray-700 bg-white px-4 py-2 rounded-full shadow border border-gray-200">点击上传房屋平面图</span>
+                    <span class="text-[10px] text-gray-600 font-bold mt-2 bg-white/50 px-2 py-0.5 rounded">支持 JPG / PNG / WEBP / PDF</span>
                 </div>
-                <input type="file" id="fsUpload" accept="image/png, image/jpeg, image/webp, image/jpg" class="hidden">
+                <input type="file" id="fsUpload" accept="image/png, image/jpeg, image/webp, image/jpg, application/pdf" class="hidden">
 
                 <!-- 八卦透明罗盘 (SVG) + 动态生成的 UI 标签组 -->
                 <div class="fs-compass-layer z-10" id="compassOverlay" style="opacity: 0.85;">
@@ -358,6 +364,7 @@
     </div>
 
     <script>
+        // 设置你自己的 API 密钥
         const apiKey = ""; 
         let GLOBAL_LUNAR = null; let REPORT_DATA = null; let USER_FINGERPRINT = ""; let DIVINED_LOG = {}; 
 
@@ -371,7 +378,7 @@
             document.getElementById('app-fengshui').classList.toggle('hidden', mode !== 'fengshui');
         }
 
-        // ------------------ 八字命理核心逻辑 ------------------
+        // ------------------ 八字命理核心逻辑 (原版锁定) ------------------
         const WX_COLOR_MAP = { "金":"var(--color-jin)", "木":"var(--color-mu)", "水":"var(--color-shui)", "火":"var(--color-huo)", "土":"var(--color-tu)" };
         const getWX = (gz) => "甲乙寅卯".includes(gz)?"木":("丙丁巳午".includes(gz)?"火":("戊己辰戌丑未".includes(gz)?"土":("庚辛申酉".includes(gz)?"金":("壬癸亥子".includes(gz)?"水":"土"))));
 
@@ -406,23 +413,16 @@
             return "双鱼座";
         }
 
-        // --- 核心修复：死命令防短回复机制 ---
         async function fetchAnalysis(prompt, retry = 0) {
-            const system = `你现在是“森泽师兄”，顶级命理风水大师。
-必须严格返回扁平 JSON 对象。严禁嵌套，内容纯中文。
-字段列表：t_geju, t_wuxing, t_liunian, c_fangxiang, c_caiku, c_jianyi, l_lianyuan, l_cidang, l_huajie, a_piming, a_zhuxing, a_shensha。
-【死命令：字数强制要求】
-每一个字段的内容必须是长篇大论的深度解析！每个字段绝对不允许少于150字！
-请多用四字断语，结合大运流年、十神生克、五行制化详细展开分析。如果只是简单几句话，将视为推演失败！
-2026丙午年火旺，请结合具体八字进行详尽批断。直接返回 JSON 文本，不要 Markdown 包裹。`;
+            const system = `你现在是“森泽师兄”，顶级命理大师。
+            要求：必须严格返回扁平 JSON 对象。严禁嵌套，内容纯中文。
+            字段：t_geju, t_wuxing, t_liunian, c_fangxiang, c_caiku, c_jianyi, l_lianyuan, l_cidang, l_huajie, a_piming, a_zhuxing, a_shensha。
+            【极其重要】：为了确保公平详尽，每个字段的内容长度必须精准控制在 180 到 250 字之间。
+            2026丙午，火旺。根据提供的八字进行深度推演。直接返回 JSON 文本，不要 Markdown 包裹。`;
             try {
                 const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
                     method: "POST", headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ 
-                        contents: [{ parts: [{ text: prompt + " 请务必长篇大论，每个字段不少于150字，文风古雅厚重！" }] }], 
-                        systemInstruction: { parts: [{ text: system }] }, 
-                        generationConfig: { responseMimeType: "application/json", temperature: 0.7 } 
-                    })
+                    body: JSON.stringify({ contents: [{ parts: [{ text: prompt }] }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { responseMimeType: "application/json", temperature: 0.6 } })
                 });
                 const data = await response.json(); let text = data.candidates[0].content.parts[0].text.trim();
                 text = text.replace(/```json/g, "").replace(/```/g, "");
@@ -470,4 +470,439 @@
             document.getElementById('constellationSlot').innerHTML = `<span class="constellation-tag">${star}</span>`;
 
             document.getElementById('pYear').innerHTML = bazi.getYearGan() + "<br>" + bazi.getYearZhi();
-            document.getElementById('pMonth').innerHTML = b
+            document.getElementById('pMonth').innerHTML = bazi.getMonthGan() + "<br>" + bazi.getMonthZhi();
+            document.getElementById('pDay').innerHTML = bazi.getDayGan() + "<br>" + bazi.getDayZhi();
+            document.getElementById('pHour').innerHTML = bazi.getTimeGan() + "<br>" + bazi.getTimeZhi();
+            
+            const wxs = { "金":0, "木":0, "水":0, "火":0, "土":0 };
+            [bazi.getYearGan(), bazi.getYearZhi(), bazi.getMonthGan(), bazi.getMonthZhi(), bazi.getDayGan(), bazi.getDayZhi(), bazi.getTimeGan(), bazi.getTimeZhi()].forEach(c => wxs[getWX(c)]++);
+            let lineHtml = "", labelHtml = "", maxV = 0, maxK = "";
+            for(let k in wxs) {
+                const pct = (wxs[k]/8)*100;
+                if(wxs[k] > 0) lineHtml += `<div class="wx-segment" style="width:${pct}%; background:${WX_COLOR_MAP[k]}"></div>`;
+                labelHtml += `<div class="wx-label-item" style="width:${pct||20}%; color:${WX_COLOR_MAP[k]}">${k}</div>`;
+                if(wxs[k] > maxV) { maxV = wxs[k]; maxK = k; }
+            }
+            document.getElementById('wuxingLine').innerHTML = lineHtml;
+            document.getElementById('wuxingLabels').innerHTML = labelHtml;
+            document.getElementById('strongestLabel').innerText = `【${maxK}气】最旺`;
+            
+            document.getElementById('boneVal').innerText = getBone(lunar, h) + "两";
+            document.getElementById('nayinVal').innerText = "纳音：" + bazi.getYearNaYin();
+            const tags = getTags(bazi);
+            document.getElementById('logicTags').innerHTML = tags.map(t => `<span class="px-2 py-1 bg-red-50 border border-red-200 text-red-800 rounded text-[10px] font-black">${t}</span>`).join('');
+            
+            const myChong = {"鼠":"马","马":"鼠","牛":"羊","羊":"牛","虎":"猴","猴":"虎","兔":"鸡","鸡":"兔","龙":"狗","狗":"龙","蛇":"猪","猪":"蛇"}[lunar.getYearShengXiao()];
+            let luckD = [];
+            for(let i=1; i<=15; i++) {
+                let d2 = new Date(); d2.setDate(new Date().getDate() + i); let l2 = Lunar.fromDate(d2);
+                if(l2.getDayShengXiao() !== myChong && (l2.getDayYi().includes("祈福") || l2.getDayYi().includes("交易"))) {
+                    luckD.push(`<li><span class="text-red-700 font-bold">●</span> ${l2.getMonthInChinese()}月${l2.getDayInChinese()} (${l2.getDayShengXiao()})</li>`);
+                }
+                if(luckD.length >= 6) break;
+            }
+            document.getElementById('luckyDaysList').innerHTML = luckD.join('');
+            document.getElementById('luckyDaysModule').classList.remove('hidden');
+
+            REPORT_DATA = await fetchAnalysis(`命主:${g==1?'乾造':'坤造'}, 八字:${bazi.toString()}, 刑冲:${tags.join(',')}, 流年:2026丙午。深度推演。`);
+            if(REPORT_DATA) { switchTab('total', document.querySelector('.tab-btn')); }
+        };
+
+        function switchTab(key, el) {
+            document.querySelectorAll('.tab-btn').forEach(t => t.classList.remove('active'));
+            if(el) el.classList.add('active');
+            const main = document.getElementById('mainContent');
+            const map = {
+                total: { h:"岁序乾坤 · 命宫总纲", sub:["格局定式","五行流变","流年吉凶"], keys:["t_geju","t_wuxing","t_liunian"]},
+                career: { h:"官禄财星 · 宏图大略", sub:["事业方向","财库盈缩","开运建议"], keys:["c_fangxiang","c_caiku","c_jianyi"]},
+                love: { h:"缘契三生 · 红鸾天喜", sub:["良缘锁定","人际磁场","化解之道"], keys:["l_lianyuan","l_cidang","l_huajie"]},
+                ancient: { h:"星盘秘辛 · 骨重神数", sub:["袁天罡批命","紫微主星","神煞加持"], keys:["a_piming","a_zhuxing","a_shensha"]}
+            };
+            const config = map[key];
+            if(REPORT_DATA) {
+                let html = `<div class="fade-in"><h3 class="chapter-h">${config.h}</h3>`;
+                config.sub.forEach((s, i) => {
+                    html += `<h4 class="sub-h">${s}</h4><p class="report-p">${REPORT_DATA[config.keys[i]] || "天机演化中，请参考总论。"}</p>`;
+                });
+                main.innerHTML = html + `</div>`;
+            }
+        }
+
+        // --- 起卦商业流 ---
+        function handleDivinationFlow() {
+            if(!GLOBAL_LUNAR) return alert("请先开启命鉴演算！");
+            const now = new Date();
+            const dateKey = now.getFullYear() + "" + (now.getMonth() + 1) + "" + now.getDate();
+            const statusKey = USER_FINGERPRINT + "_" + dateKey;
+            
+            if(DIVINED_LOG[statusKey]) {
+                return renderDivinationResult(); 
+            }
+            renderPaymentModal();
+        }
+
+        function renderPaymentModal() {
+            document.getElementById('modalOverlay').classList.remove('hidden');
+            document.getElementById('modalContent').innerHTML = `
+                <div class="text-center py-6">
+                    <h2 class="font-art text-4xl text-[#8B0000] mb-4">奉金结缘</h2>
+                    <p class="text-sm text-gray-600 mb-8 font-bold leading-relaxed px-4 text-center">请扫码供奉 1 元功德金<br>解锁今日专属雀神吉位、财运与天机数字</p>
+                    <div class="qr-frame mb-8">
+                        <img src="fe181e71aacd6b31d8b9b3be43067881.jpg" alt="微信收款码" class="w-full h-auto">
+                    </div>
+                    <button onclick="confirmPayment()" class="btn-main w-full py-4 text-xl rounded-xl shadow-xl">我已支付 · 立即起卦</button>
+                    <p class="text-[10px] text-gray-400 mt-8 italic text-center">点击外部阴影退出 · 支付安全由森泽盾保护</p>
+                </div>
+            `;
+        }
+
+        function confirmPayment() {
+            const now = new Date();
+            const dateKey = now.getFullYear() + "" + (now.getMonth() + 1) + "" + now.getDate();
+            const statusKey = USER_FINGERPRINT + "_" + dateKey;
+            DIVINED_LOG[statusKey] = true; 
+            renderDivinationResult();
+        }
+
+        function renderDivinationResult() {
+            document.getElementById('modalOverlay').classList.remove('hidden');
+            const now = new Date();
+            const dateKey = now.getFullYear() + "" + (now.getMonth() + 1) + "" + now.getDate();
+            const fingerprintSum = USER_FINGERPRINT.split('').reduce((acc, char, idx) => acc + char.charCodeAt(0) * (idx + 1), 0);
+            const seed = (fingerprintSum * 7 + parseInt(dateKey) * 13) % 1000000;
+            
+            const guas64 = [
+                {n:"地天泰", d:"三阳开泰。内健而外顺，诸事可成。今日在事业上会有贵人暗助。"},
+                {n:"火天大有", d:"红日当空。财运如日中天，适合处理财务问题，回报丰厚。"},
+                {n:"雷风恒", d:"长久之道。运势平稳，适合长线布局，忌短线投机。"},
+                {n:"泽地萃", d:"精英汇聚。利于社交与合作，会有意外的合作机会上门。"},
+                {n:"水天需", d:"待时而动。目前宜静待时机，不宜盲目出击，财运平稳。"},
+                {n:"风山渐", d:"循序渐进。事业如登山，虽慢但稳。适合处理基础性文件。"}
+            ];
+            const gua = guas64[seed % guas64.length];
+            const lotteryNums = [ (seed%10+1), ((seed*3)%33+1), ((seed*7)%33+1), ((seed*11)%16+1) ].sort((a,b)=>a-b);
+            const dirs = ["正东", "东南", "正南", "西南", "正西", "西北", "正北", "东北"];
+            const wealthLevel = seed % 100 > 70 ? "横财大吉" : (seed % 100 > 30 ? "稳定上升" : "宜守成");
+
+            document.getElementById('modalContent').innerHTML = `
+                <div class="text-center">
+                    <div class="flex justify-center mb-6"><i class="ph-fill ph-yin-yang text-7xl text-[#8B0000] animate-spin-slow"></i></div>
+                    <div class="text-[10px] bg-red-800 text-white px-3 py-1 rounded inline-block mb-3 font-black uppercase tracking-widest">今日天机锁定: ${seed.toString(16).toUpperCase()}</div>
+                    <h2 class="font-art text-6xl text-[#1A1A1A] mb-4">${gua.n}</h2>
+                    <div class="bg-gray-100 p-6 rounded-lg italic text-lg font-art mb-8 border-x-8 border-[#8B0000]">“一元锁定今日运，雀神入座万事成。”</div>
+                    <div class="text-left space-y-6">
+                        <div class="wealth-card"><div class="wealth-title">今日正财</div><p class="text-sm text-gray-700">状态：<strong class="text-red-700">${wealthLevel}</strong>。${gua.d}</p></div>
+                        <div class="wealth-card"><div class="wealth-title">今日偏财</div><p class="text-sm text-gray-700">偏财位于${dirs[(seed+2)%8]}位。${(seed%10)>5?'小有盈余，宜见好就收。':'财气平淡，宜守为上。'}</p></div>
+                        <div class="wealth-card"><div class="wealth-title">彩票建议</div><p class="text-xs text-gray-600 mb-2">天机参考幸运数：</p><div class="flex gap-2">${lotteryNums.map(n => `<div class="lucky-num-box">${n}</div>`).join('')}</div></div>
+                        <div class="wealth-card"><div class="wealth-title">雀神方位</div><p class="text-sm text-gray-700 leading-relaxed">打牌坐 <span class="direction-tag">${dirs[seed%8]}</span> 面对 <span class="direction-tag">${dirs[(seed+4)%8]}</span>。避属${["鼠","马","羊"][seed%3]}者。</p></div>
+                        <div class="bg-red-50 p-5 rounded-lg border-2 border-red-200">
+                            <h4 class="font-bold text-[#8B0000] mb-3 text-lg flex items-center gap-2"><i class="ph-fill ph-shield-check"></i> 避煞与吉时</h4>
+                            <div class="bg-white p-3 rounded text-xs text-gray-600 leading-relaxed shadow-inner">
+                                <p class="mb-2"><strong>避煞指南：</strong>忌往${dirs[(seed+1)%8]}走动，穿${seed%2?'绛红':'天青'}色衣物补气。</p>
+                                <hr class="my-2 border-gray-100">
+                                <p><strong>辰时(07-09):</strong> 宜面试洽谈</p><p><strong>午时(11-13):</strong> 宜纳财祈福</p><p><strong>戌时(19-21):</strong> 宜入宅安床</p>
+                            </div>
+                        </div>
+                        <div class="p-4 bg-gray-100 rounded-lg border-l-4 border-gray-400">
+                            <h4 class="font-bold text-gray-800 text-sm mb-1">今日忠告</h4>
+                            <p class="text-xs text-gray-600">${seed%2?'凡事退后一步自然宽。勿争口舌。':'静以修身，俭以养德。今日财气虽有，但不宜贪功。'}</p>
+                        </div>
+                    </div>
+                    <p class="text-[10px] text-gray-400 mt-12 text-center border-t pt-4 italic">今日结果已锁定 · 点击阴影背景退出</p>
+                </div>
+            `;
+        }
+
+        // ==================== 风水堪舆模块逻辑 ====================
+        
+        let imgTranslateX = 0;
+        let imgTranslateY = 0;
+        let imgScale = 1;
+        let isDraggingImg = false;
+        let startX, startY;
+
+        const floorplanImg = document.getElementById('floorplanImg');
+
+        function updateImgTransform() {
+            floorplanImg.style.transform = `translate(${imgTranslateX}px, ${imgTranslateY}px) scale(${imgScale})`;
+        }
+
+        floorplanImg.addEventListener('mousedown', function(e) {
+            isDraggingImg = true;
+            startX = e.clientX - imgTranslateX;
+            startY = e.clientY - imgTranslateY;
+            floorplanImg.classList.add('cursor-grabbing');
+            floorplanImg.classList.remove('cursor-grab');
+            e.preventDefault(); 
+        });
+
+        window.addEventListener('mousemove', function(e) {
+            if(!isDraggingImg) return;
+            imgTranslateX = e.clientX - startX;
+            imgTranslateY = e.clientY - startY;
+            updateImgTransform();
+        });
+
+        window.addEventListener('mouseup', function(e) {
+            if(isDraggingImg) {
+                isDraggingImg = false;
+                floorplanImg.classList.remove('cursor-grabbing');
+                floorplanImg.classList.add('cursor-grab');
+            }
+        });
+
+        floorplanImg.addEventListener('touchstart', function(e) {
+            isDraggingImg = true;
+            const touch = e.touches[0];
+            startX = touch.clientX - imgTranslateX;
+            startY = touch.clientY - imgTranslateY;
+            floorplanImg.classList.add('cursor-grabbing');
+            floorplanImg.classList.remove('cursor-grab');
+        }, {passive: false});
+
+        window.addEventListener('touchmove', function(e) {
+            if(!isDraggingImg) return;
+            if (e.target === floorplanImg) e.preventDefault();
+            const touch = e.touches[0];
+            imgTranslateX = touch.clientX - startX;
+            imgTranslateY = touch.clientY - startY;
+            updateImgTransform();
+        }, {passive: false});
+
+        window.addEventListener('touchend', function(e) {
+            if(isDraggingImg) {
+                isDraggingImg = false;
+                floorplanImg.classList.remove('cursor-grabbing');
+                floorplanImg.classList.add('cursor-grab');
+            }
+        });
+
+        document.getElementById('fsUpload').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if(!file) return; 
+            
+            if (!file.type.match('image.*') && file.type !== 'application/pdf') {
+                alert("请选择有效的图片或PDF文件 (如 JPG, PNG, WEBP, PDF)");
+                return;
+            }
+
+            const handleImageSrc = (src) => {
+                floorplanImg.src = src;
+                floorplanImg.classList.remove('hidden');
+                floorplanImg.classList.add('cursor-grab');
+                document.getElementById('fsUploadLabel').classList.add('hidden');
+                imgTranslateX = 0; imgTranslateY = 0;
+                imgScale = document.getElementById('fsZoom').value / 100;
+                updateImgTransform();
+            };
+
+            if (file.type === 'application/pdf') {
+                // 如果是 PDF，使用 pdf.js 提取第一页并渲染为图片
+                const hintText = document.getElementById('uploadHintText');
+                const originalText = hintText.innerText;
+                hintText.innerText = "PDF 解析中，请稍候...";
+                
+                const fileReader = new FileReader();
+                fileReader.onload = async function() {
+                    try {
+                        const typedarray = new Uint8Array(this.result);
+                        const pdf = await pdfjsLib.getDocument(typedarray).promise;
+                        const page = await pdf.getPage(1); // 提取第一页
+                        
+                        const viewport = page.getViewport({ scale: 2.0 }); // 放大两倍保证清晰度
+                        const canvas = document.createElement('canvas');
+                        canvas.width = viewport.width;
+                        canvas.height = viewport.height;
+                        const ctx = canvas.getContext('2d');
+                        
+                        await page.render({ canvasContext: ctx, viewport: viewport }).promise;
+                        handleImageSrc(canvas.toDataURL('image/png'));
+                        
+                        hintText.innerText = originalText;
+                    } catch (err) {
+                        alert("PDF 解析失败，请尝试直接上传图片格式。");
+                        hintText.innerText = originalText;
+                    }
+                };
+                fileReader.readAsArrayBuffer(file);
+            } else {
+                // 原有的图片处理逻辑
+                const reader = new FileReader();
+                reader.onload = function(event) {
+                    handleImageSrc(event.target.result);
+                }
+                reader.readAsDataURL(file);
+            }
+            
+            e.target.value = '';
+        });
+
+        // --- 罗盘旋转与透明度控制 ---
+        document.getElementById('fsRotate').addEventListener('input', function(e) {
+            const deg = e.target.value;
+            document.getElementById('compassOverlay').style.transform = `rotate(${deg}deg)`;
+            document.getElementById('rotDegree').innerText = `${deg}°`;
+        });
+        
+        document.getElementById('fsOpacity').addEventListener('input', function(e) {
+            document.getElementById('compassOverlay').style.opacity = e.target.value / 100;
+        });
+
+        document.getElementById('fsZoom').addEventListener('input', function(e) {
+            imgScale = e.target.value / 100;
+            updateImgTransform();
+        });
+
+        // --- 手机物理指南针自动校准 ---
+        let compassActive = false;
+        function toggleCompass() {
+            if(compassActive) {
+                window.removeEventListener('deviceorientation', compassHandler, true);
+                compassActive = false;
+                document.getElementById('btnCompass').innerHTML = '<i class="ph-bold ph-compass"></i>自动校正';
+                document.getElementById('btnCompass').classList.remove('bg-red-200');
+                return;
+            }
+            
+            if (typeof DeviceOrientationEvent !== 'undefined' && typeof DeviceOrientationEvent.requestPermission === 'function') {
+                // iOS 13+ 权限请求
+                DeviceOrientationEvent.requestPermission().then(permissionState => {
+                    if (permissionState === 'granted') {
+                        startCompassListener();
+                    } else {
+                        alert('需要罗盘权限才能自动校准方位，请在设置中允许。');
+                    }
+                }).catch(console.error);
+            } else {
+                // Android 或非 HTTPS
+                startCompassListener();
+            }
+        }
+        
+        function startCompassListener() {
+            window.addEventListener('deviceorientation', compassHandler, true);
+            compassActive = true;
+            document.getElementById('btnCompass').innerHTML = '<i class="ph-bold ph-compass text-green-700"></i>校正中...';
+            document.getElementById('btnCompass').classList.add('bg-red-200');
+            alert("请端平手机，罗盘将自动对齐真实南北。");
+        }
+
+        function compassHandler(e) {
+            let heading = 0;
+            if (e.webkitCompassHeading) {
+                heading = e.webkitCompassHeading;
+            } else if (e.alpha) {
+                // Android fallback (近似)
+                heading = 360 - e.alpha;
+            }
+            
+            // UI 更新
+            let roundedHeading = Math.round(heading);
+            document.getElementById('fsRotate').value = roundedHeading;
+            document.getElementById('compassOverlay').style.transform = `rotate(${roundedHeading}deg)`;
+            document.getElementById('rotDegree').innerText = `${roundedHeading}°`;
+        }
+
+        // --- 动态生成八宅风水UI标签 ---
+        const BAZHAI_MAP = {
+            "南": { w: "东南", c: "南", s: "东" },     // 坎宅 (门南坐北)
+            "北": { w: "东", c: "北", s: "东南" },     // 离宅 (门北坐南)
+            "西": { w: "南", c: "东南", s: "北" },     // 震宅 (门西坐东)
+            "东": { w: "西北", c: "东北", s: "西南" }, // 兑宅 (门东坐西)
+            "东南": { w: "西", c: "西南", s: "东北" }, // 乾宅 (门东南坐西北)
+            "东北": { w: "东北", c: "西北", s: "西" }, // 坤宅 (门东北坐西南)
+            "西南": { w: "西南", c: "西", s: "西北" }, // 艮宅 (门西南坐东北)
+            "西北": { w: "北", c: "东", s: "南" }      // 巽宅 (门西北坐东南)
+        };
+
+        function renderFengshuiTags(doorDir) {
+            // 清理旧标签
+            document.querySelectorAll('.ui-tag').forEach(el => el.innerHTML = '');
+            
+            const mapping = BAZHAI_MAP[doorDir];
+            if (!mapping) return;
+
+            // 创建带背景的SVG文字标签
+            const createTag = (text, bg, fg, yOffset) => 
+                `<rect x="80" y="${yOffset-7}" width="40" height="11" rx="2" fill="${bg}" stroke="#ffffff" stroke-width="0.5"/>
+                 <text x="100" y="${yOffset}" font-size="7" fill="${fg}" font-weight="bold" text-anchor="middle">${text}</text>`;
+            
+            // 插入对应方位组，Y轴偏移避免重叠
+            document.querySelector(`#dir-${mapping.w} .ui-tag`).innerHTML += createTag("💰大财位", "#FFD700", "#8B0000", 30);
+            document.querySelector(`#dir-${mapping.c} .ui-tag`).innerHTML += createTag("💼旺事业", "#10B981", "#FFFFFF", 43);
+            document.querySelector(`#dir-${mapping.s} .ui-tag`).innerHTML += createTag("📚真文昌", "#3B82F6", "#FFFFFF", 56);
+        }
+
+        async function fetchFengshuiData(door, house) {
+            const system = `你现在是风水宗师。用户房屋大门朝向【${door}】，属【${house}】。
+            要求：严格返回扁平 JSON。严禁嵌套，内容纯中文。
+            字段：fs_wealth (财位与催旺), fs_health (健康与避煞), fs_career (文昌与事业), fs_advice (总体风水调理)。
+            【极其重要】：每个字段的分析字数必须在 150 到 200 字之间，根据八宅理论进行深度专业点评。直接返回 JSON。`;
+            try {
+                const response = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-preview-09-2025:generateContent?key=${apiKey}`, {
+                    method: "POST", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ contents: [{ parts: [{ text: "请求风水勘测报告" }] }], systemInstruction: { parts: [{ text: system }] }, generationConfig: { responseMimeType: "application/json", temperature: 0.5 } })
+                });
+                const data = await response.json(); let text = data.candidates[0].content.parts[0].text.trim();
+                text = text.replace(/```json/g, "").replace(/```/g, "");
+                return JSON.parse(text);
+            } catch (e) { return null; }
+        }
+
+        async function analyzeFengshui() {
+            const img = floorplanImg.src;
+            if(!img || img.endsWith('html') || floorplanImg.classList.contains('hidden')) {
+                alert("请先点击上方区域上传房屋平面图！");
+                return;
+            }
+
+            const doorSelect = document.getElementById('doorFacing');
+            const doorText = doorSelect.options[doorSelect.selectedIndex].text;
+            const doorDir = doorSelect.value;
+            const houseMatch = doorText.match(/\((.*?)\)/);
+            const houseType = houseMatch ? houseMatch[1] : "未知宅";
+
+            // ★ 触发罗盘八卦图上的标签渲染 ★
+            renderFengshuiTags(doorDir);
+
+            document.getElementById('fsResultSection').classList.remove('hidden');
+            const contentDiv = document.getElementById('fsReportContent');
+            document.getElementById('fsHouseType').innerText = `${houseType} · 风水布局卷`;
+            
+            contentDiv.innerHTML = `
+                <div class="flex flex-col items-center justify-center h-48 text-gray-400">
+                    <i class="ph-bold ph-spinner-gap animate-spin text-5xl mb-3 text-[#8B0000]"></i>
+                    <p class="font-bold tracking-widest text-sm text-[#8B0000]">气场建模中，宗师定局...</p>
+                </div>`;
+            document.getElementById('fsLoader').classList.remove('hidden');
+            
+            const fsData = await fetchFengshuiData(doorDir, houseType);
+            document.getElementById('fsLoader').classList.add('hidden');
+            
+            if(fsData) {
+                contentDiv.innerHTML = `
+                    <div class="fade-in space-y-4">
+                        <h4 class="sub-h">【生旺财位】</h4>
+                        <p class="report-p">${fsData.fs_wealth || '天机推演中...'}</p>
+                        
+                        <h4 class="sub-h">【健康避煞】</h4>
+                        <p class="report-p">${fsData.fs_health || '天机推演中...'}</p>
+                        
+                        <h4 class="sub-h">【事业文昌】</h4>
+                        <p class="report-p">${fsData.fs_career || '天机推演中...'}</p>
+                        
+                        <div class="mt-6 bg-red-50 p-5 rounded-lg border-2 border-red-200">
+                            <h4 class="font-bold text-[#8B0000] mb-3 text-lg flex items-center gap-2"><i class="ph-fill ph-magic-wand"></i> 宗师调理总纲</h4>
+                            <p class="text-sm text-gray-700 leading-relaxed text-justify indent-8">${fsData.fs_advice || '调整磁场，顺应自然。'}</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                contentDiv.innerHTML = `<p class="text-center text-red-700 font-bold py-10">推演失败，请检查网络后重试。</p>`;
+            }
+            
+            document.getElementById('fsResultSection').scrollIntoView({ behavior: 'smooth' });
+        }
+    </script>
+</body>
+</html>
